@@ -6,7 +6,7 @@ REST API сервис для получения данных организац�
 - Python 3.12 + FastAPI + uvicorn
 - httpx + BeautifulSoup4 (парсинг)
 - asyncpg + PostgreSQL (кеш)
-- Docker (деплой через Dokploy)
+- Docker
 
 ## API
 
@@ -28,12 +28,12 @@ REST API сервис для получения данных организац�
 
 ## Environment Variables
 
-```
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=postgres
-DB_USER=postgres
-DB_PASSWORD=
-CACHE_TTL_HOURS=24
-REQUEST_DELAY=2.5
-```
+| Переменная | Описание |
+|-----------|----------|
+| `DB_HOST` | Хост PostgreSQL |
+| `DB_PORT` | Порт PostgreSQL |
+| `DB_NAME` | Имя базы данных |
+| `DB_USER` | Пользователь БД |
+| `DB_PASSWORD` | Пароль БД |
+| `CACHE_TTL_HOURS` | Время жизни кеша в часах (по умолчанию 24) |
+| `REQUEST_DELAY` | Задержка между запросами к rusprofile в секундах (по умолчанию 2.5) |
