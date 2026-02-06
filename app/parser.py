@@ -132,28 +132,28 @@ async def parse_company_page(url: str, delay: float = 2.5) -> dict:
         text = html
 
         # OKATO
-        m = re.search(r"\u041e\u041a\u0410\u0422\u041e[:\s]*(\d{5,11})", text)
+        m = re.search("\u041e\u041a\u0410\u0422\u041e[:\\s]*(\\d{5,11})", text)
         if m:
             extra["okato"] = m.group(1)
 
         # OKTMO
-        m = re.search(r"\u041e\u041a\u0422\u041c\u041e[:\s]*(\d{5,11})", text)
+        m = re.search("\u041e\u041a\u0422\u041c\u041e[:\\s]*(\\d{5,11})", text)
         if m:
             extra["oktmo"] = m.group(1)
 
         # OKFS
-        m = re.search(r"\u041e\u041a\u0424\u0421[:\s]*(\d{2,5})", text)
+        m = re.search("\u041e\u041a\u0424\u0421[:\\s]*(\\d{2,5})", text)
         if m:
             extra["okfs"] = m.group(1)
 
         # OKOGU
-        m = re.search(r"\u041e\u041a\u041e\u0413\u0423[:\s]*(\d{5,7})", text)
+        m = re.search("\u041e\u041a\u041e\u0413\u0423[:\\s]*(\\d{5,7})", text)
         if m:
             extra["okogu"] = m.group(1)
 
         # KPP fallback via regex
         if "kpp" not in extra:
-            m = re.search(r"\u041a\u041f\u041f[:\s]*(\d{9})", text)
+            m = re.search("\u041a\u041f\u041f[:\\s]*(\\d{9})", text)
             if m:
                 extra["kpp"] = m.group(1)
 
@@ -202,7 +202,7 @@ async def get_company_by_inn(inn: str, delay: float = 2.5) -> Company | None:
 
 
 async def get_company_by_ogrn(ogrn: str, delay: float = 2.5) -> Company | None:
-    """Search by OGRN \u2014 same AJAX endpoint, match by OGRN."""
+    """Search by OGRN -- same AJAX endpoint, match by OGRN."""
     results = await search_ajax(ogrn, delay=delay)
 
     target = None
@@ -238,7 +238,7 @@ async def get_company_by_ogrn(ogrn: str, delay: float = 2.5) -> Company | None:
 
 
 async def search_companies(query: str, delay: float = 2.5) -> list[SearchResult]:
-    """Search by name/query \u2014 returns list of brief results."""
+    """Search by name/query -- returns list of brief results."""
     results = await search_ajax(query, delay=delay)
 
     out = []
