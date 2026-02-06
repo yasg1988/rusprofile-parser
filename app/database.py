@@ -17,18 +17,30 @@ COLUMNS = [
 ]
 
 
-async def init_db() -> None:
+async def _ensure_pool() -> asyncpg.Pool | None:
+    """Lazy pool initialization with retry on each call."""
     global _pool
-    _pool = await asyncpg.create_pool(
-        host=DB_HOST,
-        port=DB_PORT,
-        database=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        min_size=1,
-        max_size=5,
-    )
-    logger.info("Database pool created: %s@%s:%s/%s", DB_USER, DB_HOST, DB_PORT, DB_NAME)
+    if _pool:
+        return _pool
+    try:
+        _pool = await asyncpg.create_pool(
+            host=DB_HOST,
+            port=DB_PORT,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            min_size=1,
+            max_size=5,
+        )
+        logger.info("Database pool created: %s@%s:%s/%s", DB_USER, DB_HOST, DB_PORT, DB_NAME)
+    except Exception as e:
+        logger.warning("Database unavailable: %s", e)
+        _pool = None
+    return _pool
+
+
+async def init_db() -> None:
+    await _ensure_pool()
 
 
 async def close_db() -> None:
@@ -39,10 +51,11 @@ async def close_db() -> None:
 
 
 async def get_cached(inn: str, force: bool = False) -> Company | None:
-    if not _pool or force:
+    pool = await _ensure_pool()
+    if not pool or force:
         return None
 
-    row = await _pool.fetchrow(
+    row = await pool.fetchrow(
         "SELECT * FROM organizations WHERE inn = $1", inn
     )
     if not row:
@@ -64,10 +77,11 @@ async def get_cached(inn: str, force: bool = False) -> Company | None:
 
 
 async def get_cached_by_ogrn(ogrn: str, force: bool = False) -> Company | None:
-    if not _pool or force:
+    pool = await _ensure_pool()
+    if not pool or force:
         return None
 
-    row = await _pool.fetchrow(
+    row = await pool.fetchrow(
         "SELECT * FROM organizations WHERE ogrn = $1", ogrn
     )
     if not row:
@@ -89,7 +103,8 @@ async def get_cached_by_ogrn(ogrn: str, force: bool = False) -> Company | None:
 
 
 async def save_company(company: Company) -> None:
-    if not _pool:
+    pool = await _ensure_pool()
+    if not pool:
         return
 
     values = [getattr(company, col) for col in COLUMNS]
@@ -104,14 +119,15 @@ async def save_company(company: Company) -> None:
             {updates},
             updated_at = NOW()
     """
-    await _pool.execute(query, *values)
+    await pool.execute(query, *values)
 
 
 async def get_stats() -> StatsResponse:
-    if not _pool:
+    pool = await _ensure_pool()
+    if not pool:
         return StatsResponse(total_cached=0)
 
-    row = await _pool.fetchrow("""
+    row = await pool.fetchrow("""
         SELECT
             COUNT(*) as total,
             MIN(created_at) as oldest,
