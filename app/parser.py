@@ -113,7 +113,7 @@ async def parse_company_page(url: str, delay: float = 2.5) -> dict:
 
         soup = BeautifulSoup(html, "html.parser")
 
-        # KPP from #clip_kpp or text search
+        # KPP from #clip_kpp
         kpp_el = soup.find(id="clip_kpp")
         if kpp_el:
             extra["kpp"] = kpp_el.get_text(strip=True)
@@ -123,39 +123,30 @@ async def parse_company_page(url: str, delay: float = 2.5) -> dict:
         if okpo_el:
             extra["okpo"] = okpo_el.get_text(strip=True)
 
-        # Full name from itemprop or meta
+        # Full name from itemprop
         legal_el = soup.find(attrs={"itemprop": "legalName"})
         if legal_el:
             extra["full_name"] = legal_el.get_text(strip=True)
 
-        # Try to extract codes from page text
-        text = html
+        # OKATO from #clip_okato
+        okato_el = soup.find(id="clip_okato")
+        if okato_el:
+            extra["okato"] = okato_el.get_text(strip=True)
 
-        # OKATO
-        m = re.search("\u041e\u041a\u0410\u0422\u041e[:\\s]*(\\d{5,11})", text)
-        if m:
-            extra["okato"] = m.group(1)
+        # OKTMO from #clip_oktmo
+        oktmo_el = soup.find(id="clip_oktmo")
+        if oktmo_el:
+            extra["oktmo"] = oktmo_el.get_text(strip=True)
 
-        # OKTMO
-        m = re.search("\u041e\u041a\u0422\u041c\u041e[:\\s]*(\\d{5,11})", text)
-        if m:
-            extra["oktmo"] = m.group(1)
+        # OKFS from #clip_okfs
+        okfs_el = soup.find(id="clip_okfs")
+        if okfs_el:
+            extra["okfs"] = okfs_el.get_text(strip=True)
 
-        # OKFS
-        m = re.search("\u041e\u041a\u0424\u0421[:\\s]*(\\d{2,5})", text)
-        if m:
-            extra["okfs"] = m.group(1)
-
-        # OKOGU
-        m = re.search("\u041e\u041a\u041e\u0413\u0423[:\\s]*(\\d{5,7})", text)
-        if m:
-            extra["okogu"] = m.group(1)
-
-        # KPP fallback via regex
-        if "kpp" not in extra:
-            m = re.search("\u041a\u041f\u041f[:\\s]*(\\d{9})", text)
-            if m:
-                extra["kpp"] = m.group(1)
+        # OKOGU from #clip_okogu
+        okogu_el = soup.find(id="clip_okogu")
+        if okogu_el:
+            extra["okogu"] = okogu_el.get_text(strip=True)
 
     except Exception as e:
         logger.warning("Failed to parse company page %s: %s", url, e)
