@@ -69,9 +69,12 @@ COLUMN_TYPES = {
 }
 
 
+_migrated: bool = False
+
+
 async def _ensure_pool() -> asyncpg.Pool | None:
-    """Lazy pool initialization with retry on each call."""
-    global _pool
+    """Lazy pool initialization with retry on each call. Runs migration on first connect."""
+    global _pool, _migrated
     if _pool:
         return _pool
     try:
@@ -85,6 +88,9 @@ async def _ensure_pool() -> asyncpg.Pool | None:
             max_size=5,
         )
         logger.info("Database pool created: %s@%s:%s/%s", DB_USER, DB_HOST, DB_PORT, DB_NAME)
+        if not _migrated:
+            await _auto_migrate(_pool)
+            _migrated = True
     except Exception as e:
         logger.warning("Database unavailable: %s", e)
         _pool = None
@@ -104,9 +110,7 @@ async def _auto_migrate(pool: asyncpg.Pool) -> None:
 
 
 async def init_db() -> None:
-    pool = await _ensure_pool()
-    if pool:
-        await _auto_migrate(pool)
+    await _ensure_pool()
 
 
 async def close_db() -> None:
