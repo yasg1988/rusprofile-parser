@@ -473,7 +473,7 @@ def _parse_reliability(soup) -> dict:
         if "check_counterparty" not in script_text:
             continue
 
-        rel_match = re.search(r"""reliability['"]\s*:\s*['"](\w+)['"]""", script_text)
+        rel_match = re.search(r"""reliability['"]?\s*:\s*['"](\w+)['"]""", script_text)
         if rel_match:
             raw = rel_match.group(1)
             mapping = {
@@ -502,7 +502,7 @@ def _parse_sections(soup) -> dict:
         "sou-tile": "courts",
     }
 
-    no_data_markers = ["не найден", "отсутствуют", "не обнаружен"]
+    no_data_markers = ["не найден", "отсутству", "не обнаружен"]
 
     sections = {}
     for css_class, key in section_tiles.items():
