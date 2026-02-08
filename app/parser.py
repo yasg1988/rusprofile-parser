@@ -301,14 +301,15 @@ def _parse_finances(soup) -> dict:
         return extra
 
     tile_text = finance_tile.get_text()
-    if "отсутствуют" in tile_text:
+    if "отсутствуют" in tile_text.lower():
         return extra
 
-    # Revenue year from context
+    # Revenue year from context ("за 2024 год")
     year_match = re.search(r"за\s+(\d{4})\s*(?:год|г\.?)", tile_text)
     if year_match:
         extra["revenue_year"] = int(year_match.group(1))
 
+    # Method 1: dt/dd structure (smaller companies)
     for dt in finance_tile.find_all("dt"):
         dt_text = dt.get_text(strip=True)
         dd = dt.find_next_sibling("dd")
@@ -323,7 +324,6 @@ def _parse_finances(soup) -> dict:
             change_match = re.search(r"([↑↓±]?[+\-]?\d+[\s,.]?\d*\s*%)", dd_text)
             if change_match:
                 extra["revenue_change"] = change_match.group(1).strip()
-
         elif "Прибыль" in dt_text:
             amount_match = re.match(r"(.+?руб\.?)", dd_text)
             if amount_match:
@@ -332,16 +332,67 @@ def _parse_finances(soup) -> dict:
             if change_match:
                 extra["profit_change"] = change_match.group(1).strip()
 
-    # Financial stability, solvency, efficiency (may appear as summary text)
-    stability_match = re.search(r"(?:стабильность|устойчивость)[:\s]*(\w+)", tile_text, re.IGNORECASE)
+    # Method 2: div.finance-col structure (larger companies)
+    if not extra.get("revenue"):
+        for col in finance_tile.find_all(class_="finance-col"):
+            col_text = col.get_text()
+            opener = col.find(class_="tab-opener")
+            if not opener:
+                continue
+            label = opener.get_text(strip=True)
+
+            # Extract amount from <span class="num">X</span> <span class="num-text">unit</span>
+            num_el = col.find("span", class_="num")
+            num_text_el = col.find("span", class_="num-text")
+            if num_el and num_text_el:
+                amount = f"{num_el.get_text(strip=True)} {num_text_el.get_text(strip=True)}"
+                # Clean up &nbsp;
+                amount = amount.replace("\xa0", " ")
+            elif num_el:
+                amount = num_el.get_text(strip=True)
+            else:
+                amount = None
+
+            # Extract change from <span class="diff">
+            diff_el = col.find(class_="diff")
+            change = None
+            if diff_el:
+                change_match = re.search(r"([↑↓±]?[+\-]?\d+[\s,.]?\d*\s*%)", diff_el.get_text())
+                if change_match:
+                    change = change_match.group(1).strip()
+
+            if "Выручка" in label:
+                if amount:
+                    extra["revenue"] = amount
+                if change:
+                    extra["revenue_change"] = change
+            elif "Прибыль" in label:
+                if amount:
+                    extra["profit"] = amount
+                if change:
+                    extra["profit_change"] = change
+
+    # Financial stability, solvency, efficiency from text
+    stability_match = re.search(
+        r"(?:(?:Ф|ф)инансов\w+\s+устойчивость)\s+(\w+)", tile_text
+    )
     if stability_match:
-        extra["financial_stability"] = stability_match.group(1).upper()
-    solvency_match = re.search(r"(?:платёжеспособность|платежеспособность)[:\s]*(.+?)(?:\.|$)", tile_text, re.IGNORECASE)
+        extra["financial_stability"] = stability_match.group(1).strip()
+
+    solvency_match = re.search(
+        r"(?:(?:П|п)лат[её]жеспособность)\s+(\w+)", tile_text
+    )
     if solvency_match:
         extra["solvency"] = solvency_match.group(1).strip()
-    efficiency_match = re.search(r"(?:эффективность)[:\s]*(\w+)", tile_text, re.IGNORECASE)
+
+    efficiency_match = re.search(
+        r"(?:(?:Э|э)ффективность)\s+(\w+)", tile_text
+    )
     if efficiency_match:
-        extra["efficiency"] = efficiency_match.group(1).upper()
+        val = efficiency_match.group(1).strip()
+        # Skip if it matched a non-rating word (e.g. navigation)
+        if val.lower() in ("высокая", "нормальная", "низкая"):
+            extra["efficiency"] = val
 
     return extra
 
@@ -441,9 +492,15 @@ def _parse_taxes(soup) -> dict:
         return extra
 
     tile_text = taxes_tile.get_text()
-    if "не найдена" in tile_text or "отсутствуют" in tile_text:
+    if "не найдена" in tile_text.lower() or "отсутству" in tile_text.lower():
         return extra
 
+    # Year
+    year_match = re.search(r"за\s+(\d{4})", tile_text)
+    if year_match:
+        extra["taxes_year"] = int(year_match.group(1))
+
+    # Method 1: dt/dd structure (smaller companies)
     for dt in taxes_tile.find_all("dt"):
         dt_text = dt.get_text(strip=True)
         dd = dt.find_next_sibling("dd")
@@ -456,10 +513,20 @@ def _parse_taxes(soup) -> dict:
         elif "Взнос" in dt_text and dd_text:
             extra["contributions_sum"] = dd_text
 
-    # Year
-    year_match = re.search(r"за\s+(\d{4})", tile_text)
-    if year_match:
-        extra["taxes_year"] = int(year_match.group(1))
+    # Method 2: div.connexion-col structure (larger companies)
+    if not extra.get("taxes_sum"):
+        for col in taxes_tile.find_all(class_="connexion-col"):
+            title_el = col.find(class_="connexion-col__title")
+            num_el = col.find(class_="connexion-col__num")
+            if not title_el or not num_el:
+                continue
+            label = title_el.get_text(strip=True)
+            value = num_el.get_text(strip=True).replace("\xa0", " ")
+
+            if "Налог" in label:
+                extra["taxes_sum"] = value
+            elif "Взнос" in label:
+                extra["contributions_sum"] = value
 
     return extra
 
@@ -533,9 +600,17 @@ def _parse_sections(soup) -> dict:
 
 
 def _parse_address_unreliable(soup) -> dict:
-    """Check if address is flagged as unreliable."""
-    page_text = soup.get_text().lower()
-    if "недостоверн" in page_text and "адрес" in page_text:
+    """Check if address is flagged as unreliable in the company card (not menu)."""
+    # Look for specific patterns in the address area or company info section
+    # NOT in the counterparty check menu where "Недостоверность адреса" is a label
+    for el in soup.find_all(class_="company-info__address"):
+        if "недостоверн" in el.get_text().lower():
+            return {"address_unreliable": True}
+    # Also check for explicit unreliability markers near address
+    for el in soup.find_all(string=re.compile(r"[Сс]ведения об адресе.*недостоверн")):
+        return {"address_unreliable": True}
+    # Check for a warning/badge near the address
+    for el in soup.find_all(class_=re.compile(r"address.*unreliable|unreliable.*address")):
         return {"address_unreliable": True}
     return {}
 
