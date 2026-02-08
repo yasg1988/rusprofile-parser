@@ -532,9 +532,10 @@ def _parse_taxes(soup) -> dict:
 
 
 def _parse_reliability(soup) -> dict:
-    """Extract reliability rating from RPF.store JavaScript."""
+    """Extract reliability rating from RPF.store JavaScript and fact counts from HTML."""
     extra = {}
 
+    # Rating from JavaScript
     for script in soup.find_all("script"):
         script_text = script.string or ""
         if "check_counterparty" not in script_text:
@@ -550,6 +551,19 @@ def _parse_reliability(soup) -> dict:
             }
             extra["reliability_rating"] = mapping.get(raw, raw)
         break
+
+    # Fact counts from HTML tile (a.count.bg-positive/bg-warning/bg-negative)
+    count_map = {
+        "bg-positive": "reliability_positive",
+        "bg-warning": "reliability_warning",
+        "bg-negative": "reliability_negative",
+    }
+    for css_suffix, field in count_map.items():
+        el = soup.find("a", class_=lambda c: c and "count" in c and css_suffix in c)
+        if el:
+            text = el.get_text(strip=True)
+            if text.isdigit():
+                extra[field] = int(text)
 
     return extra
 
@@ -582,15 +596,22 @@ def _parse_sections(soup) -> dict:
         entry = {"exists": has_data}
 
         if has_data:
-            # Try to extract a count from link text
-            for link in tile.find_all("a"):
-                link_text = link.get_text(strip=True)
-                if link_text.isdigit():
-                    entry["count"] = int(link_text)
-                    break
+            tile_text_raw = tile.get_text()
+
+            # Try to extract total count from text first (e.g. "34 проверки", "680 дел")
+            total_match = re.search(r"(\d[\d\s]*\d)\s+(?:провер|дел[ао\s]|закуп|лицензи|филиал|товарн|залог|договор)", tile_text_raw)
+            if total_match:
+                entry["count"] = int(total_match.group(1).replace(" ", ""))
+            else:
+                # Fallback: first link with a digit-only text
+                for link in tile.find_all("a"):
+                    link_text = link.get_text(strip=True)
+                    if link_text.isdigit():
+                        entry["count"] = int(link_text)
+                        break
 
             # Try to extract sum for financial sections
-            sum_match = re.search(r"на сумму\s+(.+?руб\.?)", tile.get_text(), re.IGNORECASE)
+            sum_match = re.search(r"на сумму\s+(.+?руб\.?)", tile_text_raw, re.IGNORECASE)
             if sum_match:
                 entry["sum"] = sum_match.group(1).strip()
 
