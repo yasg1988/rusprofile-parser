@@ -29,14 +29,14 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Rusprofile Parser API",
     description="REST API для получения данных организаций с rusprofile.ru",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
 
 @app.get("/")
 async def health():
-    return {"status": "ok", "service": "rusprofile-parser", "version": "1.0.0"}
+    return {"status": "ok", "service": "rusprofile-parser", "version": "2.0.0"}
 
 
 @app.get("/company/inn/{inn}", response_model=Company)
